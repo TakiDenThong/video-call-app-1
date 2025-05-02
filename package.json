@@ -1,19 +1,18 @@
 {
-    "name": "video-call-app",
-    "version": "1.0.0",
-    "description": "A simple video call application using WebRTC and Socket.io",
-    "main": "server/server.js",
-    "scripts": {
-      "start": "node server/server.js"
-    },
-    "dependencies": {
-      "express": "^4.17.1",
-      "socket.io": "^4.0.0"
-    },
-    "engines": {
-      "node": "14.x"
-    },
-    "author": "Your Name",
-    "license": "MIT"
-  }
-  
+  "name": "video-call-app",
+  "version": "1.0.0",
+  "description": "A simple video call application using WebRTC and Socket.io",
+  "main": "server/server.js",
+  "scripts": {
+    "start": "node server/server.js"
+  },
+  "dependencies": {
+    "express": "^4.17.1",
+    "socket.io": "^4.0.0"
+  },
+  "engines": {
+    "node": "14.x"
+  },
+  "author": "Your Name",
+  "license": "MIT"
+}
