@@ -2,45 +2,53 @@ const socket = io();
 const peers = {};
 const localVideo = document.getElementById('localVideo');
 const remoteVideos = document.getElementById('remoteVideos');
-let localStream;
+let localStream = null;
 
-// Get media and join room
-navigator.mediaDevices.getUserMedia({ video: true, audio: true }).then(stream => {
-  localStream = stream;
-  localVideo.srcObject = stream;
-
-  socket.emit('join', { role: 'member' });
-
-  socket.on('all-users', users => {
-    users.forEach(user => createPeer(user.id, true));
+// Try to get camera/mic
+navigator.mediaDevices.getUserMedia({ video: true, audio: true })
+  .then(stream => {
+    localStream = stream;
+    localVideo.srcObject = stream;
+    socket.emit('join', { role: 'member' });
+  })
+  .catch(error => {
+    console.warn('No camera or mic access:', error);
+    socket.emit('join', { role: 'member' });
   });
 
-  socket.on('user-joined', user => {
-    createPeer(user.id, false);
-  });
-
-  socket.on('signal', async ({ from, signal }) => {
-    if (peers[from]) {
-      await peers[from].signal(signal);
-    }
-  });
-
-  socket.on('user-left', id => {
-    if (peers[id]) {
-      peers[id].destroy();
-      delete peers[id];
-      const video = document.getElementById(id);
-      if (video) video.remove();
-    }
-  });
+// On joining, get all users
+socket.on('all-users', users => {
+  users.forEach(user => createPeer(user.id, true));
 });
 
-// Peer connection setup (using simple-peer)
+// When new user joins
+socket.on('user-joined', user => {
+  createPeer(user.id, false);
+});
+
+// Handle signal (offer/answer/ice)
+socket.on('signal', async ({ from, signal }) => {
+  if (peers[from]) {
+    peers[from].signal(signal);
+  }
+});
+
+// Handle user disconnect
+socket.on('user-left', id => {
+  if (peers[id]) {
+    peers[id].destroy();
+    delete peers[id];
+    const video = document.getElementById(id);
+    if (video) video.remove();
+  }
+});
+
+// Create peer connection
 function createPeer(id, initiator) {
   const peer = new SimplePeer({
     initiator,
     trickle: false,
-    stream: localStream
+    stream: localStream || undefined
   });
 
   peer.on('signal', signal => {
@@ -52,6 +60,7 @@ function createPeer(id, initiator) {
     video.id = id;
     video.srcObject = stream;
     video.autoplay = true;
+    video.playsInline = true;
     remoteVideos.appendChild(video);
   });
 
