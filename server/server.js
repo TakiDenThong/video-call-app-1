@@ -1,47 +1,39 @@
 const express = require('express');
 const http = require('http');
-const socketIo = require('socket.io');
+const socketIO = require('socket.io');
 
 const app = express();
 const server = http.createServer(app);
-const io = socketIo(server);
+const io = socketIO(server);
+const PORT = process.env.PORT || 3000;
 
-app.use(express.static('public')); // Serve frontend from /public
+// Track connected sockets
+const sockets = new Set();
 
-// Store connected users
-let users = {};
+io.on('connection', socket => {
+  sockets.add(socket);
 
-io.on('connection', (socket) => {
-  console.log('User connected:', socket.id);
+  // Notify the new user about all current peers (just socket IDs internally)
+  const otherSockets = Array.from(sockets).filter(s => s !== socket);
+  socket.emit('all-users', otherSockets.map(s => ({ id: s.id })));
 
-  // Store user info
-  socket.on('join', (user) => {
-    users[socket.id] = { id: socket.id, role: user.role };
-    console.log(`${user.role} joined: ${socket.id}`);
+  // Notify existing users about new peer
+  socket.broadcast.emit('user-joined', { id: socket.id });
 
-    // Notify the new user about existing users
-    socket.emit('all-users', Object.values(users).filter(u => u.id !== socket.id));
-
-    // Notify others about the new user
-    socket.broadcast.emit('user-joined', users[socket.id]);
-  });
-
-  // Relay signaling data (offer, answer, ice)
+  // Relay signaling data (offers, answers, ice)
   socket.on('signal', ({ to, signal }) => {
-    io.to(to).emit('signal', {
-      from: socket.id,
-      signal
-    });
+    io.to(to).emit('signal', { from: socket.id, signal });
   });
 
-  // Handle disconnect
+  // On disconnect, remove socket and notify others
   socket.on('disconnect', () => {
-    console.log('User disconnected:', socket.id);
-    delete users[socket.id];
-    io.emit('user-left', socket.id);
+    sockets.delete(socket);
+    socket.broadcast.emit('user-left', socket.id);
   });
 });
 
-server.listen(3000, () => {
-  console.log('Server running on http://localhost:3000');
+app.use(express.static('public'));
+
+server.listen(PORT, () => {
+  console.log(`Server running at http://localhost:${PORT}`);
 });
