@@ -1,19 +1,24 @@
 <!DOCTYPE html>
-<html lang="en">
+<html>
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Live Video Call</title>
-    <link rel="stylesheet" href="style.css">
+<script src="https://cdn.jsdelivr.net/npm/simple-peer@9.11.1/simplepeer.min.js"></script>
+
+  <title>Video Call App</title>
+  <style>
+    video {
+      width: 300px;
+      margin: 10px;
+      border: 2px solid #444;
+      border-radius: 8px;
+    }
+  </style>
 </head>
 <body>
-    <h1>Live Video Call</h1>
-    <div id="videos-container"></div>
-    <div>
-        <input type="text" id="username" placeholder="Enter your name">
-        <button id="join-btn">Join</button>
-    </div>
-    <script src="/socket.io/socket.io.js"></script>
-    <script src="script.js"></script>
+  <h1>Live Video Call</h1>
+  <video id="localVideo" autoplay muted></video>
+  <div id="remoteVideos"></div>
+
+  <script src="/socket.io/socket.io.js"></script>
+  <script src="script.js"></script>
 </body>
 </html>
