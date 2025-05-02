@@ -1,110 +1,59 @@
 const socket = io();
-const videosContainer = document.getElementById('videos-container');
-const joinButton = document.getElementById('join-btn');
-const usernameInput = document.getElementById('username');
-
+const peers = {};
+const localVideo = document.getElementById('localVideo');
+const remoteVideos = document.getElementById('remoteVideos');
 let localStream;
-let peerConnections = {};
-let role = '';
 
-joinButton.addEventListener('click', () => {
-    const username = usernameInput.value.trim();
-    if (username) {
-        role = username === 'admin' ? 'admin' : 'member';
-        socket.emit('join', { role });
-        startVideoCall();
+// Get media and join room
+navigator.mediaDevices.getUserMedia({ video: true, audio: true }).then(stream => {
+  localStream = stream;
+  localVideo.srcObject = stream;
+
+  socket.emit('join', { role: 'member' });
+
+  socket.on('all-users', users => {
+    users.forEach(user => createPeer(user.id, true));
+  });
+
+  socket.on('user-joined', user => {
+    createPeer(user.id, false);
+  });
+
+  socket.on('signal', async ({ from, signal }) => {
+    if (peers[from]) {
+      await peers[from].signal(signal);
     }
+  });
+
+  socket.on('user-left', id => {
+    if (peers[id]) {
+      peers[id].destroy();
+      delete peers[id];
+      const video = document.getElementById(id);
+      if (video) video.remove();
+    }
+  });
 });
 
-function startVideoCall() {
-    navigator.mediaDevices.getUserMedia({ video: true, audio: true })
-        .then(stream => {
-            localStream = stream;
-            const videoElement = document.createElement('video');
-            videoElement.srcObject = stream;
-            videoElement.autoplay = true;
-            videosContainer.appendChild(videoElement);
-            
-            if (role === 'admin') {
-                // Admin initiates peer connections with members
-                socket.on('user-list', (users) => {
-                    users.forEach(user => {
-                        if (user.role === 'member' && !peerConnections[user.id]) {
-                            createPeerConnection(user.id);
-                        }
-                    });
-                });
-            } else {
-                // Members listen for connections from admin
-                socket.on('signal', (data) => {
-                    if (data.from !== socket.id) {
-                        handleSignal(data);
-                    }
-                });
-            }
-        })
-        .catch(err => {
-            console.error('Error accessing media devices:', err);
-        });
-}
+// Peer connection setup (using simple-peer)
+function createPeer(id, initiator) {
+  const peer = new SimplePeer({
+    initiator,
+    trickle: false,
+    stream: localStream
+  });
 
-function createPeerConnection(memberId) {
-    const peerConnection = new RTCPeerConnection();
-    peerConnection.addStream(localStream);
-    peerConnections[memberId] = peerConnection;
+  peer.on('signal', signal => {
+    socket.emit('signal', { to: id, signal });
+  });
 
-    peerConnection.onicecandidate = (event) => {
-        if (event.candidate) {
-            socket.emit('signal', {
-                to: memberId,
-                signal: { iceCandidate: event.candidate },
-            });
-        }
-    };
+  peer.on('stream', stream => {
+    const video = document.createElement('video');
+    video.id = id;
+    video.srcObject = stream;
+    video.autoplay = true;
+    remoteVideos.appendChild(video);
+  });
 
-    peerConnection.createOffer()
-        .then(offer => {
-            return peerConnection.setLocalDescription(offer);
-        })
-        .then(() => {
-            socket.emit('signal', {
-                to: memberId,
-                signal: { offer: peerConnection.localDescription },
-            });
-        })
-        .catch(err => {
-            console.error('Error creating offer:', err);
-        });
-}
-
-function handleSignal(data) {
-    const { signal, from } = data;
-
-    if (signal.offer) {
-        const peerConnection = peerConnections[from] || new RTCPeerConnection();
-        peerConnections[from] = peerConnection;
-
-        peerConnection.setRemoteDescription(new RTCSessionDescription(signal.offer))
-            .then(() => {
-                return peerConnection.createAnswer();
-            })
-            .then(answer => {
-                return peerConnection.setLocalDescription(answer);
-            })
-            .then(() => {
-                socket.emit('signal', {
-                    to: from,
-                    signal: { answer: peerConnection.localDescription },
-                });
-            })
-            .catch(err => {
-                console.error('Error handling offer:', err);
-            });
-    } else if (signal.answer) {
-        const peerConnection = peerConnections[from];
-        peerConnection.setRemoteDescription(new RTCSessionDescription(signal.answer));
-    } else if (signal.iceCandidate) {
-        const peerConnection = peerConnections[from];
-        peerConnection.addIceCandidate(new RTCIceCandidate(signal.iceCandidate));
-    }
+  peers[id] = peer;
 }
