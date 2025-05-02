@@ -1,0 +1,27 @@
+name: Deploy to Render
+
+on:
+  push:
+    branches:
+      - main  # or the branch you want to deploy from
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout Code
+      uses: actions/checkout@v2
+
+    - name: Set up Node.js
+      uses: actions/setup-node@v2
+      with:
+        node-version: '14'  # or the version you are using
+
+    - name: Install dependencies
+      run: npm install
+
+    - name: Deploy to Render
+      run: |
+        curl -sSL https://render.com/deploy/script.sh | bash
+        render deploy --service your-service-name --branch main  # Adjust as needed
