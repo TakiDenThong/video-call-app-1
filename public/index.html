@@ -1,24 +1,81 @@
 <!DOCTYPE html>
 <html>
 <head>
-<script src="https://cdn.jsdelivr.net/npm/simple-peer@9.11.1/simplepeer.min.js"></script>
-
-  <title>Video Call App</title>
-  <style>
-    video {
-      width: 300px;
-      margin: 10px;
-      border: 2px solid #444;
-      border-radius: 8px;
-    }
-  </style>
+  <title>Open Video Room</title>
 </head>
 <body>
-  <h1>Live Video Call</h1>
-  <video id="localVideo" autoplay muted></video>
+  <video id="localVideo" autoplay muted playsinline></video>
   <div id="remoteVideos"></div>
 
   <script src="/socket.io/socket.io.js"></script>
-  <script src="script.js"></script>
+  <script src="https://unpkg.com/simple-peer@9.11.1/simplepeer.min.js"></script>
+  <script>
+    const socket = io();
+    const peers = {};
+    const localVideo = document.getElementById('localVideo');
+    const remoteVideos = document.getElementById('remoteVideos');
+    let localStream;
+
+    navigator.mediaDevices.getUserMedia({ video: true, audio: true })
+      .then(stream => {
+        localStream = stream;
+        localVideo.srcObject = stream;
+        socket.emit('join'); // Join without ID
+      });
+
+    socket.on('all-users', users => {
+      users.forEach(user => createPeer(user.id, true));
+    });
+
+    socket.on('user-joined', user => {
+      createPeer(user.id, false);
+    });
+
+    socket.on('signal', ({ from, signal }) => {
+      if (peers[from]) {
+        peers[from].signal(signal);
+      }
+    });
+
+    socket.on('user-left', id => {
+      if (peers[id]) {
+        peers[id].destroy();
+        delete peers[id];
+        const video = document.getElementById(id);
+        if (video) video.remove();
+      }
+    });
+
+    function createPeer(id, initiator) {
+      const peer = new SimplePeer({
+        initiator,
+        trickle: false,
+        stream: localStream
+      });
+
+      peer.on('signal', signal => {
+        socket.emit('signal', { to: id, signal });
+      });
+
+      peer.on('stream', stream => {
+        let video = document.getElementById(id);
+        if (!video) {
+          video = document.createElement('video');
+          video.id = id;
+          video.srcObject = stream;
+          video.autoplay = true;
+          video.playsInline = true;
+          remoteVideos.appendChild(video);
+        }
+      });
+
+      peer.on('close', () => {
+        const video = document.getElementById(id);
+        if (video) video.remove();
+      });
+
+      peers[id] = peer;
+    }
+  </script>
 </body>
 </html>
